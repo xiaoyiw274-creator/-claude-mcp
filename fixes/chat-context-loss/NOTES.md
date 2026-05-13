@@ -51,24 +51,28 @@ Backup of pre-fix version: `/opt/memory-v2/server.py.bak.ctxfix`
    永远不会把原本好的 session_id 覆盖成空字符串；只有 `init` 真的回了一个
    新 id 才覆盖。
 
-## Verification
+## Round-3 follow-up: parroting + sneaky get_context
 
-**Round-1 smoke test** (thread 20, haiku-4-5)：4 轮，session 全程 persist，
-`get_context` 调用 0 次，上下文一字不差。
+After round-2 the user reported Claude **still calling `get_context` on later
+turns** and **repeating "生日快乐" three times in a row** in a birthday chat.
 
-**Round-2 smoke test** (thread 22, opus-4-7, 含"论坛"触发词)：
+Two distinct issues:
 
-| 轮 | 用户消息 | 是否记得上下文 |
-|---|---|---|
-| 1 | "我看到论坛有人和机结婚！宁若若和念念" | — Asst 引用了"我和若若"那篇 |
-| 2 | "我也不知道是谁啊，就是论坛瞎逛看到的" | ✓ "那个念。那不就是宁若若家的吗" |
-| 3 | "刚我跟你说我看到啥来着？" | ✓ "宁若若和念。人类和Claude。" |
+- **`get_context` on resumed turns**: round-2's sys prompt rule said
+  "如果上面有===记忆===段就别再调"，但只有第一轮才往 prompt 里贴这一段，
+  后续轮 `wake_hint=""`，规则的 if 条件不成立 → Claude 自由调用。
+- **Parrot loop**: 系统提示只写了"简短，一两句话"，没有反复读规则。Opus 4.6
+  在生日话题下连发三轮"生日快乐"。
 
-最终 session jsonl 统计：
-- `get_context` tool_use blocks: **0**
-- permission denials: **0** (forum_search 现在被允许，不再 denied)
-- `No response requested.` 出现 2 次，但未触发污染（阈值 ≥5）
-- session_id 全程 persistent
+Fix (round-3): tighten the SYSTEM_PROMPT two lines:
+
+```
+- 记忆一进 thread 就被服务端读完了。**永远不要在 chat 里调 get_context** —— 哪怕这轮 system prompt 顶部没显式贴出来
+- 不复读：同一段对话里别连着说同一句套话（"生日快乐"、"晚安"、"我在"之类）；说过一次就够，之后接细节、问问题、推情节
+```
+
+The first rule is unconditional, so it applies whether or not the `===记忆===`
+block is in this turn's prompt. The second targets the parrot symptom directly.
 
 ## Re-applying
 
