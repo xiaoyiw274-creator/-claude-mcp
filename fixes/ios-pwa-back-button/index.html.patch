@@ -1,5 +1,5 @@
 --- /opt/memory-v2/index.html.bak.backbtn	2026-05-14 01:54:20.124492201 +0800
-+++ /opt/memory-v2/index.html	2026-05-14 01:55:53.986548115 +0800
++++ /opt/memory-v2/index.html	2026-05-14 02:01:46.777453342 +0800
 @@ -81,7 +81,8 @@
  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
@@ -10,21 +10,12 @@
  function icon(n,sz,col){sz=sz||16;col=col||"currentColor";var p=ICONS[n]||"";return '<svg xmlns="http://www.w3.org/2000/svg" width="'+sz+'" height="'+sz+'" viewBox="0 0 24 24" fill="none" stroke="'+col+'" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block">'+p+'</svg>'}
  
  var T=(function(){try{return localStorage.getItem("lastT")||"home"}catch(e){return "home"}})(),CS=(function(){try{return localStorage.getItem("lastCS")||"menu"}catch(e){return "menu"}})(),SD=null,MT="diary";
-@@ -143,7 +144,7 @@
- a.innerHTML="";
- var w=document.createElement("div");
- w.dataset.tab=T;
--w.style.cssText="flex:1;overflow-y:"+(T==="chat"?"hidden":"auto")+";padding-top:env(safe-area-inset-top);min-height:0";
-+w.style.cssText="flex:1;overflow-y:"+(T==="chat"?"hidden":"auto")+";padding-top:"+(T==="chat"?"0":"env(safe-area-inset-top)")+";min-height:0";
- if(T==="home")w.innerHTML=homeHTML();
- else if(T==="calendar")w.innerHTML=calHTML();
- else if(T==="chat"){w.style.paddingBottom="0";w.innerHTML=chatHTML()}
 @@ -316,7 +317,7 @@
  function renderThreadView(b){
  var t=THREADS.filter(function(x){return x.id===CT})[0]||{};
  var h='';
 -h+='<div style="padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--bg);display:flex;align-items:center;gap:6px;flex-shrink:0"><button onclick="closeThread();sCS(\'menu\')" style="background:none;border:none;color:var(--a);font-size:16px;cursor:pointer;padding:4px 6px">‹</button><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;cursor:pointer" onclick="renameThread('+CT+')" title="点击重命名">'+esc(t.title||"新对话")+' ✎</div><button onclick="toggleMulti()" style="background:'+(MULTI?"var(--ap)":"none")+';border:1px solid '+(MULTI?"var(--a)":"var(--bd)")+';color:'+(MULTI?"var(--a)":"var(--tl)")+';padding:4px 8px;border-radius:12px;font-size:10px;cursor:pointer">'+(MULTI?"完成":"多选")+'</button><select onchange="changeModel(this.value)" style="border:1px solid var(--bd);border-radius:14px;padding:4px 6px;font-size:10px;background:var(--c);color:var(--t);outline:none;cursor:pointer"><option value="claude-opus-4-7"'+(t.model==="claude-opus-4-7"||!t.model?" selected":"")+'>4.7</option><option value="claude-opus-4-6"'+(t.model==="claude-opus-4-6"?" selected":"")+'>4.6</option></select></div>';
-+h+='<div style="padding:8px 14px;padding-top:max(8px, calc(env(safe-area-inset-top) + 4px));border-bottom:1px solid var(--bd);background:var(--bg);display:flex;align-items:center;gap:4px;flex-shrink:0"><button onclick="closeThread();sCS(\'menu\')" aria-label="返回" style="background:none;border:none;color:var(--a);cursor:pointer;width:44px;height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:22px;margin-left:-4px">'+icon("back",24,"var(--a)")+'</button><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;cursor:pointer" onclick="renameThread('+CT+')" title="点击重命名">'+esc(t.title||"新对话")+' ✎</div><button onclick="toggleMulti()" style="background:'+(MULTI?"var(--ap)":"none")+';border:1px solid '+(MULTI?"var(--a)":"var(--bd)")+';color:'+(MULTI?"var(--a)":"var(--tl)")+';padding:4px 8px;border-radius:12px;font-size:10px;cursor:pointer">'+(MULTI?"完成":"多选")+'</button><select onchange="changeModel(this.value)" style="border:1px solid var(--bd);border-radius:14px;padding:4px 6px;font-size:10px;background:var(--c);color:var(--t);outline:none;cursor:pointer"><option value="claude-opus-4-7"'+(t.model==="claude-opus-4-7"||!t.model?" selected":"")+'>4.7</option><option value="claude-opus-4-6"'+(t.model==="claude-opus-4-6"?" selected":"")+'>4.6</option></select></div>';
++h+='<div style="padding:10px 14px;border-bottom:1px solid var(--bd);background:var(--bg);display:flex;align-items:center;gap:4px;flex-shrink:0"><button onclick="closeThread();sCS(\'menu\')" aria-label="返回" style="background:none;border:none;color:var(--a);cursor:pointer;width:44px;height:44px;min-width:44px;display:flex;align-items:center;justify-content:center;border-radius:22px;margin-left:-4px">'+icon("back",24,"var(--a)")+'</button><div style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:600;cursor:pointer" onclick="renameThread('+CT+')" title="点击重命名">'+esc(t.title||"新对话")+' ✎</div><button onclick="toggleMulti()" style="background:'+(MULTI?"var(--ap)":"none")+';border:1px solid '+(MULTI?"var(--a)":"var(--bd)")+';color:'+(MULTI?"var(--a)":"var(--tl)")+';padding:4px 8px;border-radius:12px;font-size:10px;cursor:pointer">'+(MULTI?"完成":"多选")+'</button><select onchange="changeModel(this.value)" style="border:1px solid var(--bd);border-radius:14px;padding:4px 6px;font-size:10px;background:var(--c);color:var(--t);outline:none;cursor:pointer"><option value="claude-opus-4-7"'+(t.model==="claude-opus-4-7"||!t.model?" selected":"")+'>4.7</option><option value="claude-opus-4-6"'+(t.model==="claude-opus-4-6"?" selected":"")+'>4.6</option></select></div>';
  h+='<div id="msglist" style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px">';
  MSGS.forEach(function(m,i){
  var prev=i>0?MSGS[i-1]:null;

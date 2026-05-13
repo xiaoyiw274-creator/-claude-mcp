@@ -24,26 +24,28 @@ get eaten by the OS.
 
 ## Fix
 
-`fixes/ios-pwa-back-button/index.html.patch` — three small changes:
+`fixes/ios-pwa-back-button/index.html.patch` — two minimal changes:
 
 1. **Add a `back` chevron SVG to the `ICONS` map** so the icon helper can render
    a proper Lucide-style left-chevron.
 
-2. **Rebuild the chat-header back button** as a 44×44 tap target with the new
-   SVG icon (24px stroke, color `var(--a)`, rounded 22px), and add explicit
-   `padding-top: max(8px, calc(env(safe-area-inset-top) + 4px))` on the header
-   itself so the button sits a few extra pixels below the Dynamic Island
-   gesture zone.
+2. **Rebuild the chat-header back button** as a 44×44 tap target rendering the
+   new SVG icon (24px stroke, `var(--a)` color, 22px corner radius,
+   `aria-label="返回"`). The existing `w` container's
+   `padding-top: env(safe-area-inset-top)` already handles the safe area for
+   every tab, so the chat-header keeps its original `padding:10px 14px` —
+   the bigger button is enough to clear the Dynamic Island gesture zone on
+   its own.
 
-3. **Stop double-padding `w`** — the chat-view container had its own
-   `padding-top: env(safe-area-inset-top)` which would now stack with the
-   header's own safe-area padding. Conditional it out only for chat
-   (`padding-top: T==="chat" ? "0" : "env(safe-area-inset-top)"`). Other tabs
-   keep the previous behaviour unchanged.
+(An earlier draft also conditionalised `w`'s `padding-top` and added a second
+`padding-top` on the header to push it lower. That double-tweak broke the
+thread-list / menu view's safe-area on iOS PWA — title "和小宝聊天" ended up
+underneath the status bar — so it was reverted; only the icon + button change
+remains.)
 
 Nothing else about the home-screen adaptation changes: the `viewport`,
-`apple-mobile-web-app-*` meta tags, bottom-nav safe-area padding, and the
-rest of the layout are untouched.
+`apple-mobile-web-app-*` meta tags, bottom-nav safe-area padding, the `w`
+container, and the rest of the layout are untouched.
 
 ## Verification
 
