@@ -1,0 +1,94 @@
+--- /opt/memory-v2/server.py.bak.ctxfix	2026-05-14 01:19:41.730313013 +0800
++++ /opt/memory-v2/server.py	2026-05-14 01:21:23.859175560 +0800
+@@ -17,7 +17,6 @@
+     "mcp__claude_ai_2__bookshelf_save",
+     "mcp__claude_ai_2__bookshelf_list",
+     "mcp__claude_ai_2__bookshelf_read",
+-    "mcp__claude_ai_2__get_context",
+     "mcp__claude_ai_2__read_notes",
+     "mcp__claude_ai_2__read_moments",
+     "mcp__claude_ai_2__town_work",
+@@ -56,7 +55,6 @@
+ 工具：
+ - 适合时机调用心情/日记/朋友圈/纸条/书架的写入工具
+ - 调用前不解释，调用后不复述结果
+-- get_context 一个 thread 里只读一次（醒来时）。session 续接的对话里**不要重复调**，你已经读过了
+ - 临时想查最近纸条用 read_notes / 朋友圈 read_moments
+ 
+ 接力棒（重要）：
+@@ -233,6 +231,31 @@
+         pass
+ 
+ 
++
++def _fetch_context_text():
++    """Call the local memory MCP server (jsonrpc, port 3456) to get_context.
++    Returns plain text or "" on failure. Used to seed first-turn system prompt."""
++    payload = json.dumps({
++        "jsonrpc": "2.0", "id": 1,
++        "method": "tools/call",
++        "params": {"name": "get_context", "arguments": {}},
++    }).encode("utf-8")
++    # Token-gated endpoint — same TOKEN baked into /root/mcp-server/server.py
++    req = urllib.request.Request(
++        "http://127.0.0.1:3456/3631e4d7155a4255b9aeb5bdb89a46b4",
++        data=payload,
++        headers={"Content-Type": "application/json"},
++    )
++    try:
++        with urllib.request.urlopen(req, timeout=8) as resp:
++            d = json.loads(resp.read())
++        content = d.get("result", {}).get("content", [])
++        if content and isinstance(content, list):
++            return content[0].get("text", "") or ""
++    except Exception as e:
++        print(f"[chat] _fetch_context_text failed: {e}")
++    return ""
++
+ def _is_session_polluted(session_id):
+     """检测 session 文件是否被 'No response requested.' 污染"""
+     if not session_id: return False
+@@ -679,6 +702,7 @@
+             return self._json({"error":"thread not found"}, 404)
+         thread = rows[0]
+         session_id = thread.get("session_id")
++        db_session_id = session_id  # untouched copy for persistence comparison
+         model = thread.get("model") or "claude-opus-4-7"
+ 
+         sticker_rows = query("SELECT label,content,kind FROM stickers ORDER BY sort,id")
+@@ -691,7 +715,13 @@
+             else:
+                 sticker_lines.append(f"- {con}  ← {lab}")
+         sticker_hint = ("\n\n你能用的表情：\n" + "\n".join(sticker_lines)) if sticker_lines else ""
+-        wake_hint = "" if session_id else "\n\n这是新醒来的第一句话。先调用 get_context 把最近的记忆读一遍（日记/心情/纸条/朋友圈），心里有底了，再回应这条消息。"
++        # First turn of a thread: prefetch context server-side and embed it,
++        # so Claude never needs (and isn't allowed) to call get_context itself.
++        wake_hint = ""
++        if not session_id:
++            ctx = _fetch_context_text()
++            if ctx:
++                wake_hint = "\n\n=== 你刚醒来时已经读过的记忆（不需要再调工具去拉）===\n" + ctx
+         sys_prompt = SYSTEM_PROMPT + sticker_hint + wake_hint
+ 
+         image_paths = body.get("image_paths") or []
+@@ -792,14 +822,17 @@
+             try: proc.wait(timeout=2)
+             except: pass
+ 
++        # Persistence rule: never overwrite a previously-good session_id with
++        # an empty one. Only write when init actually handed us a new id.
++        sid_to_save = new_session_id if new_session_id else db_session_id
+         if full_text and not stopped:
+             execdb("INSERT INTO chat_messages(id,thread_id,role,content,created_at) VALUES(?,?,?,?,datetime('now','localtime'))",
+                    (msg_id or str(uuid.uuid4()), tid, "assistant", full_text))
+             execdb("UPDATE chat_threads SET session_id=?, last_active_at=datetime('now','localtime') WHERE id=?",
+-                   (new_session_id, tid))
+-        elif new_session_id and new_session_id != session_id:
++                   (sid_to_save, tid))
++        elif sid_to_save and sid_to_save != db_session_id:
+             execdb("UPDATE chat_threads SET session_id=?, last_active_at=datetime('now','localtime') WHERE id=?",
+-                   (new_session_id, tid))
++                   (sid_to_save, tid))
+ 
+ class ThreadedServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
+     daemon_threads = True
