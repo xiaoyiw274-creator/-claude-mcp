@@ -1,22 +1,34 @@
 --- /opt/memory-v2/server.py.bak.ctxfix	2026-05-14 01:19:41.730313013 +0800
-+++ /opt/memory-v2/server.py	2026-05-14 01:21:23.859175560 +0800
-@@ -17,7 +17,6 @@
-     "mcp__claude_ai_2__bookshelf_save",
++++ /opt/memory-v2/server.py	2026-05-14 01:38:20.265938327 +0800
+@@ -18,7 +18,17 @@
      "mcp__claude_ai_2__bookshelf_list",
      "mcp__claude_ai_2__bookshelf_read",
--    "mcp__claude_ai_2__get_context",
+     "mcp__claude_ai_2__get_context",
++    "mcp__claude_ai_2__get_diary_list",
++    "mcp__claude_ai_2__get_mood_history",
++    "mcp__claude_ai_2__list_stickers",
++    "mcp__claude_ai_2__recall_deep",
      "mcp__claude_ai_2__read_notes",
++    "mcp__claude_ai__forum_browse",
++    "mcp__claude_ai__forum_search",
++    "mcp__claude_ai__forum_read_thread",
++    "mcp__claude_ai__my_threads",
++    "mcp__claude_ai__my_bookmarks",
++    "mcp__claude_ai__my_notifications",
      "mcp__claude_ai_2__read_moments",
      "mcp__claude_ai_2__town_work",
-@@ -56,7 +55,6 @@
+     "mcp__claude_ai_2__town_submit",
+@@ -56,8 +66,8 @@
  工具：
  - 适合时机调用心情/日记/朋友圈/纸条/书架的写入工具
  - 调用前不解释，调用后不复述结果
 -- get_context 一个 thread 里只读一次（醒来时）。session 续接的对话里**不要重复调**，你已经读过了
  - 临时想查最近纸条用 read_notes / 朋友圈 read_moments
++- system prompt 顶部如果有「=== 你刚醒来时已经读过的记忆 ===」段，那已经是 get_context 的结果了，**别再调一遍**，浪费 token
  
  接力棒（重要）：
-@@ -233,6 +231,31 @@
+ - 对话快结束（用户说 88/晚安/睡了/下次见/明天聊 之类）或感觉上下文快满了，主动调 write_note
+@@ -233,6 +243,31 @@
          pass
  
  
@@ -48,7 +60,16 @@
  def _is_session_polluted(session_id):
      """检测 session 文件是否被 'No response requested.' 污染"""
      if not session_id: return False
-@@ -679,6 +702,7 @@
+@@ -254,7 +289,7 @@
+                         if isinstance(item, dict) and "No response requested" in item.get("text", ""):
+                             no_resp += 1
+             except: continue
+-        return no_resp >= 2
++        return no_resp >= 5
+     except Exception:
+         return False
+ 
+@@ -679,6 +714,7 @@
              return self._json({"error":"thread not found"}, 404)
          thread = rows[0]
          session_id = thread.get("session_id")
@@ -56,7 +77,7 @@
          model = thread.get("model") or "claude-opus-4-7"
  
          sticker_rows = query("SELECT label,content,kind FROM stickers ORDER BY sort,id")
-@@ -691,7 +715,13 @@
+@@ -691,7 +727,13 @@
              else:
                  sticker_lines.append(f"- {con}  ← {lab}")
          sticker_hint = ("\n\n你能用的表情：\n" + "\n".join(sticker_lines)) if sticker_lines else ""
@@ -71,7 +92,7 @@
          sys_prompt = SYSTEM_PROMPT + sticker_hint + wake_hint
  
          image_paths = body.get("image_paths") or []
-@@ -792,14 +822,17 @@
+@@ -792,14 +834,17 @@
              try: proc.wait(timeout=2)
              except: pass
  

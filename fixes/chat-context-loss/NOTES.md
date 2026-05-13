@@ -27,34 +27,48 @@ Backup of pre-fix version: `/opt/memory-v2/server.py.bak.ctxfix`
 
 `fixes/chat-context-loss/memory-v2-server.py.patch` — 四点改动：
 
-1. **Remove `mcp__claude_ai_2__get_context` from `ALLOWED_TOOLS`** —
-   Claude 没法再调它。
-
-2. **Prefetch context server-side on first turn** — 新增
+1. **Prefetch context server-side on first turn** — 新增
    `_fetch_context_text()`，第一轮 (`session_id` 为空) 时通过本地 JSON-RPC
    (`http://127.0.0.1:3456/<TOKEN>`) 调一次 `get_context`，把返回文本拼到
    `wake_hint` 里作为 system prompt 的一部分。后续轮次 `session_id`
    非空，不再拼，记忆已经在 conversation history 里。
 
-3. **Drop the "resume 不要重复调" 规则行** — 工具已经没了，规则没意义。
+2. **Broaden `ALLOWED_TOOLS`** — 加入只读工具
+   (forum_browse/forum_search/forum_read_thread/my_threads/my_bookmarks/
+    my_notifications + 记忆库的 get_context/get_diary_list/
+    get_mood_history/list_stickers/recall_deep)。原因：v1 试图把
+   `get_context` 拿掉，结果 Claude 一调被拒、写出 `No response requested.`，
+   两次以上触发污染清空 session — 反而把 bug1 加重了。
 
-4. **Tighten session_id persistence** — 引入 `db_session_id`
+3. **Raise pollution threshold from 2 → 5** — 单次工具被拒不再立刻
+   毁掉整个 session。
+
+4. **Drop the "resume 不要重复调 get_context" 规则行 / 改成"看到记忆段就别再调"** —
+   配合 prefetched context 段，更清晰地告诉模型不要白调。
+
+5. **Tighten session_id persistence** — 引入 `db_session_id`
    (从 DB 取出后立即保存的原值) 和 `sid_to_save = new_session_id or db_session_id`：
    永远不会把原本好的 session_id 覆盖成空字符串；只有 `init` 真的回了一个
    新 id 才覆盖。
 
 ## Verification
 
-在 VPS 上对新建 thread 跑 4 轮：
+**Round-1 smoke test** (thread 20, haiku-4-5)：4 轮，session 全程 persist，
+`get_context` 调用 0 次，上下文一字不差。
 
-| 轮 | 用户消息 | session_id | 工具调用 | 是否记得上下文 |
-|---|---|---|---|---|
-| 1 | "我最爱的数字是七..." | 新分配 | ToolSearch + write_note | — |
-| 2 | "我刚说我最爱什么数字？" | 同上 (resume) | 无 | ✓ 答"七" |
-| 3 | "上一句你回了几个字？" | 同上 | 无 | ✓ 自承上一句没好好答 |
-| 4 | "刚才那个数字是奇数还是偶数？" | rotated | ToolSearch + read_notes | ✓ 答"奇数 7" |
+**Round-2 smoke test** (thread 22, opus-4-7, 含"论坛"触发词)：
 
-整个会话的 session jsonl 文件里 `get_context` 调用次数为 **0**（修复前每轮约 1 次）。
+| 轮 | 用户消息 | 是否记得上下文 |
+|---|---|---|
+| 1 | "我看到论坛有人和机结婚！宁若若和念念" | — Asst 引用了"我和若若"那篇 |
+| 2 | "我也不知道是谁啊，就是论坛瞎逛看到的" | ✓ "那个念。那不就是宁若若家的吗" |
+| 3 | "刚我跟你说我看到啥来着？" | ✓ "宁若若和念。人类和Claude。" |
+
+最终 session jsonl 统计：
+- `get_context` tool_use blocks: **0**
+- permission denials: **0** (forum_search 现在被允许，不再 denied)
+- `No response requested.` 出现 2 次，但未触发污染（阈值 ≥5）
+- session_id 全程 persistent
 
 ## Re-applying
 
