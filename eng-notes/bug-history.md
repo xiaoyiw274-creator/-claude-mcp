@@ -129,3 +129,17 @@ PRAGMA synchronous=NORMAL;
 - `node --check` 验证 JS（用 fs 读 script 标签内容）
 - systemctl restart 对应 service
 - 改完跑 curl 测一遍接口
+
+## 15. exec-mcp 服务启动崩溃（NameError: false）
+
+**症状**: `systemctl status exec-mcp` 显示 activating auto-restart 死循环；exec_vps MCP 全部 502
+
+**根因**: `/root/mcp-server/server.py` 写 tool schema 时手抖写成 JS 风格 `"default": false`，Python 里要大写 `False`，模块加载直接 NameError 退出
+
+**修法**:
+```
+sed -i 's/"default": false/"default": False/g' /root/mcp-server/server.py
+systemctl restart exec-mcp
+```
+
+**教训**: schema dict 是 Python 字面量不是 JSON，写完用 `python3 -c "import server"` 自检一遍再 restart
