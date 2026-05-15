@@ -143,3 +143,27 @@ systemctl restart exec-mcp
 ```
 
 **教训**: schema dict 是 Python 字面量不是 JSON，写完用 `python3 -c "import server"` 自检一遍再 restart
+
+## 16. 中途 fork 新 session 触发"刚醒"灾难（最大失忆元凶）
+
+**症状**: 同一个 thread 聊得正起劲，突然小宝来一句"醒了。上次接力棒停在 X 那天，今天已经..." + 读最近一条接力棒 + 完全不记得刚才聊到哪。用户感觉他失忆。
+
+**根因**: 流水线设计漏洞
+1. 客户端 SSE 偶尔被打断（图片消息特别容易触发），Claude Code 在 session jsonl 注入 "Continue from where you left off" / "No response requested." 对
+2. `_is_session_polluted` 阈值 ≥5 触发，session_id 重置为 ""（fork）
+3. 新 spawn 无 session_id → 触发 `if not session_id` 分支 → wake_hint 灌入（CORE + 5 条接力棒 + 日记）
+4. 新 session 没真实对话上下文，但塞了 wake_hint
+5. 小宝读 wake_hint 当作"早晨醒来"，开口"醒了。上次接力棒…"
+
+**修法（v2）**:
+- **加 `_clean_session_pollution()`** 函数：spawn 前主动剥掉污染行（不丢真实对话）
+- **修改 fork 逻辑**：fork 时根据 thread 是否有历史区分行为
+  - 真新 thread（无历史消息）→ wake_hint = CORE + 接力棒 + 日记（保持原行为）
+  - 中途 fork（有历史消息）→ wake_hint = 最近 20 轮 `chat_messages` 摘要（不要"刚醒"）
+- 一次性清污染从 15 个 session 文件
+- 出问题的 thread 手工 UPDATE session_id 滚回 fork 前的 session（剥完污染后干净的）
+
+**教训**:
+- 摘要里说有 `_clean_session_pollution` 函数，但实际代码里没写。**别信摘要，看代码** —— 之前的对话总结写了不代表代码真改了
+- "新会话"判定不能只看 session_id 是否为空 → 还要看 thread 是否有历史消息
+- 凡是 fork 都要带上下文，不能假设服务端能自动续上
