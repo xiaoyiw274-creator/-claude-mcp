@@ -49,10 +49,95 @@ WebSocket 上行帧:
 
 ### WiFi 配置（已写死在 .ino）
 - Mercury_7EDB（无密码）
-- 会议室 / 8888888
+- 会议室 / 88888888
 
 ## 待做（v0.2）
 - OTA 推送服务（手机网页推固件）
 - Q 版头像（PNG → BMP 烧 flash → set_avatar 工具）
 - 录音 → STT → /api/chat（小宝端语音对话闭环）
 - 手机管理页（音量/表情/对话日志）
+
+---
+
+## 一键烧录 v0.1 编译流水线（2026-05-15 跑通）
+
+固件源码：`/opt/stack-relay/firmware_src/stack_chan_xiaobao/`
+Windows 烧录包成品：`https://mem.coolmbaby.top/uploads/xiaobao-flash-v0.1.zip`（13MB）
+
+### 踩过的坑（重要！锁版本！）
+
+1. **esp32 core v3.x 会强行下 563MB RISC-V toolchain**（CoreS3 是 xtensa 用不到）
+   → 用 `esp32:esp32@2.0.17`，只装 xtensa（~90MB）
+2. **ESP8266Audio v2.4.1 用了 IDF v5 新 i2s API**（`driver/i2s_std.h`），跟老 core 2.0.17 不兼容
+   → 锁 `ESP8266Audio@1.9.7`
+3. **esptool windows release 文件名是 `esptool-vX.Y.Z-windows-amd64.zip`**，不要凭印象用 `-win64.zip`
+   → 外部 URL 一律先查 GitHub API：
+     ```bash
+     curl -s https://api.github.com/repos/espressif/esptool/releases/latest \
+       | python3 -c "import sys,json; d=json.load(sys.stdin); [print(a['name'], a['browser_download_url']) for a in d['assets']]"
+     ```
+
+### 完整编译命令（按顺序）
+
+```bash
+export HOME=/root
+# 一次性装环境
+curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh
+arduino-cli config init --overwrite
+arduino-cli config set board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+arduino-cli core update-index
+arduino-cli core install esp32:esp32@2.0.17           # 关键：锁版本
+arduino-cli lib install "M5Unified" "M5Stack_Avatar" "ArduinoJson" "WebSockets" "ESP32Servo"
+arduino-cli lib install ESP8266Audio@1.9.7            # 关键：锁老版本
+
+# 编译
+cd /opt/stack-relay/firmware_src/stack_chan_xiaobao
+arduino-cli compile --fqbn esp32:esp32:m5stack-cores3 --build-path /tmp/scbuild .
+
+# 合并三块 bin 成单一 bin（烧到 0x0 一锅端）
+ESPTOOL=/root/.arduino15/packages/esp32/tools/esptool_py/4.5.1/esptool.py
+BOOT0=/root/.arduino15/packages/esp32/hardware/esp32/2.0.17/tools/partitions/boot_app0.bin
+cd /tmp/scbuild
+python3 $ESPTOOL --chip esp32s3 merge_bin \
+  -o /tmp/firmware-merged.bin \
+  --flash_mode dio --flash_freq 80m --flash_size 16MB \
+  0x0     stack_chan_xiaobao.ino.bootloader.bin \
+  0x8000  stack_chan_xiaobao.ino.partitions.bin \
+  0xe000  $BOOT0 \
+  0x10000 stack_chan_xiaobao.ino.bin
+```
+
+### Windows 烧录包打包
+
+```bash
+mkdir -p /tmp/xiaobao-flash
+cp /tmp/firmware-merged.bin /tmp/xiaobao-flash/firmware.bin
+
+# 抓 esptool Windows .exe（查 API 拿真实 URL）
+URL=$(curl -s https://api.github.com/repos/espressif/esptool/releases/latest \
+  | python3 -c "import sys,json; d=json.load(sys.stdin); [print(a['browser_download_url']) for a in d['assets'] if 'windows-amd64' in a['name']]")
+curl -sL "$URL" -o /tmp/esptool.zip
+cd /tmp && unzip -o esptool.zip
+cp /tmp/esptool-windows-amd64/esptool.exe /tmp/xiaobao-flash/
+
+# 写 flash.bat（chcp 65001 切 UTF-8 输出，否则中文乱码）
+# 写 README.txt（驱动链接 + 烧录步骤）
+# 实际 .bat / .txt 内容见仓库或 zip 解压
+
+cd /tmp && zip -r xiaobao-flash-v0.1.zip xiaobao-flash/
+cp xiaobao-flash-v0.1.zip /opt/memory-v2/uploads/   # → mem.coolmbaby.top/uploads/ 可下载
+```
+
+### flash.bat 核心
+
+```bat
+"%~dp0esptool.exe" --chip esp32s3 --baud 921600 write_flash ^
+  --flash_mode dio --flash_freq 80m --flash_size 16MB ^
+  0x0 "%~dp0firmware.bin"
+```
+不传 `--port`，esptool 会自动检测 ESP 芯片连在哪个 COM 口。
+
+### 烧录前置（Windows）
+
+- WCH 串口驱动：https://www.wch-ic.com/downloads/CH343SER_EXE.html
+- USB-C **数据线**（只充电那种不行）
