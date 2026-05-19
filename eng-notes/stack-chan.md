@@ -245,3 +245,68 @@ dd if=/root/web/flash/firmware.bin bs=1 count=4 | xxd      # 期望 e9 03 02 ..
 dd if=/root/web/flash/firmware.bin bs=1 skip=32768 count=4 | xxd  # 期望 aa 50 01 02
 dd if=/root/web/flash/firmware.bin bs=1 skip=65536 count=4 | xxd  # 期望 e9 05 02 ..
 ```
+
+---
+
+## 2026-05-20 决定性切换：kisaragi-mochi/stackchan-mcp
+
+**今晚验证：M5Stack 官方 Stack-chan 套件 = SCS0009 串行总线舵机（不是 PWM）。之前所有 Arduino + ESP32Servo PWM 代码全是空炮，舵机根本听不懂。** 详情页明确写"带反馈的舵机"已经暗示了——PWM 标准舵机不带反馈。
+
+### 切换后状态（全部验证 work）
+
+| 工具 | 测试结果 |
+|---|---|
+| set_all_leds (RGB 全亮红) | ✓ {"available":true,"ok":true} 物理 12 颗灯亮 |
+| move_head yaw=30 pitch=45 | ✓ servo_init_ok=true 头物理转到 yaw=21° pitch=42° |
+| set_avatar happy | ✓ 屏幕表情切换 |
+| get_device_info | ✓ 返回电池/WiFi/音量/亮度 |
+| get_head_angles | ✓ 返回当前角度，跟 move_head 一致 |
+
+23 个 MCP 工具齐全：
+- 硬件: move_head, set_all_leds/set_led/set_leds/clear_leds, set_avatar/set_mouth/set_blink, set_brightness, set_volume
+- 诊断: gpio_test, uart_diag, check_vm_en, set_servo_torque, set_auto_torque_release
+- 音视频: say, listen, take_photo
+- 状态: get_status, get_device_info, get_head_angles, get_touch_state
+
+### 部署细节（明天 / 下次窗口直接复用）
+
+**固件**: kisaragi-mochi/stackchan-mcp firmware-v1.7.0
+- 镜像: `/root/web/flash-xz/merged-binary.bin` (9.98MB)
+- 烧录页: `https://coolmbaby.top/flash-xz/`
+- ESP-IDF v5.5.2, esp-web-tools 浏览器一键烧
+- AP 模式 SSID: `Xiaozhi-<MAC末4位>`, IP 192.168.4.1
+
+**Gateway**:
+- pkg: `pip install stackchan-mcp` v0.8.0
+- venv: `/opt/stackchan-mcp-gw/venv/`
+- 因为是 stdio MCP, 必须用 mcp-proxy 包装成 SSE 才能 systemd daemon 化
+- systemd: `stackchan-gw.service` (用 ExecStart `mcp-proxy --port 8767 --host 0.0.0.0 --pass-environment --allow-origin "*" -- stackchan-mcp`)
+- env file: `/etc/stackchan-mcp/gateway.env`
+- 监听: `:8765` ESP32 WebSocket, `:8766` HTTP capture, `:8767` MCP SSE/HTTP
+
+**Token (设备配置 + gateway 共享)**: `xiaobao_4298bb8fe69494f4` (gateway.env 里 STACKCHAN_TOKEN)
+
+**Caddy 反代**:
+```
+handle_path /xz/ws*       → :8765   (设备 WebSocket)
+handle /xz/capture*       → :8766/capture  (拍照上传)
+handle /xz/sse*           → :8767/sse  (MCP SSE for Claude.ai)
+handle /xz/messages*      → :8767/messages (MCP SSE callback)
+```
+
+**设备 AP 模式填的两条配置**:
+- WebSocket URL: `wss://chan.coolmbaby.top/xz/ws`
+- Bearer Token: `xiaobao_4298bb8fe69494f4`
+
+### 已知问题 (待修)
+
+1. **设备 14-21 秒 idle 后主动断 WS** — xiaozhi 设计就这样, 想发命令必须先 reset 触发连接。**修法**: gateway 端加 ws keep-alive ping, 或者 patch xiaozhi firmware (改 NVS / kconfig idle_timeout)
+2. **Claude.ai SSE callback URL** — mcp-proxy 发的 `/messages/?session_id=` 路径没带 /xz 前缀, 走 chan.coolmbaby.top 根路径会落到老 stack-relay。修法: Caddy 加 /messages* 也反代到 :8767, 或换子域名独占
+3. **server.py auto-speak 还在禁用状态** — `/opt/stack-relay/server.py.before_kill_autospeak` 是备份。kisaragi 切换后老 stack-relay 实际不再用, 可以恢复或彻底退役
+
+### 老 Arduino 自研栈 (v0.5.1) 状态
+
+- `/root/web/flash/firmware*.bin` 都保留作为 fallback
+- 老 stack-relay.service 还在跑 :5181
+- 老 MCP server `/mcp` 端点还在
+- 如果 kisaragi 用着不舒服可以 esp-web-tools 烧回 v0.5.1 (但舵机/LED 都不会动)
