@@ -160,10 +160,66 @@ systemctl restart exec-mcp
 - **修改 fork 逻辑**：fork 时根据 thread 是否有历史区分行为
   - 真新 thread（无历史消息）→ wake_hint = CORE + 接力棒 + 日记（保持原行为）
   - 中途 fork（有历史消息）→ wake_hint = 最近 20 轮 `chat_messages` 摘要（不要"刚醒"）
-- 一次性清污染从 15 个 session 文件
-- 出问题的 thread 手工 UPDATE session_id 滚回 fork 前的 session（剥完污染后干净的）
+- 一次性清 96 行污染从 15 个 session 文件
+- thread 29 手工 UPDATE session_id 滚回 fork 前的 d1828144（剥完污染后 41 行干净的）
 
 **教训**:
 - 摘要里说有 `_clean_session_pollution` 函数，但实际代码里没写。**别信摘要，看代码** —— 之前的对话总结写了不代表代码真改了
 - "新会话"判定不能只看 session_id 是否为空 → 还要看 thread 是否有历史消息
 - 凡是 fork 都要带上下文，不能假设服务端能自动续上
+
+## 17. Stack Chan 黑屏一闪一闪 boot loop（V0.4.0~V0.4.3）
+
+**症状**: CoreS3 上电后屏幕亮一下立刻灭，循环往复，不显示任何脸/文字。烧 7-8 次都一样。
+
+**根因**: `avatar.init()` 在 setup() 早期被调用，会 spawn 一个 FreeRTOS task 持续刷脸到 sprite/SPI。setup 后面紧跟 `connectWiFi()`（大量 `M5.Display.fillScreen/printf`）+ `downloadFaces()`（6 张 HTTPS JPG，每个 mbedtls 握手吃 16-24KB 栈 + 64KB PSRAM）。Avatar task 跟主线程抢栈/抢 SPI bus → panic reboot → 屏幕循环亮灭。
+
+M5Stack-Avatar 官方 README 原话: "Some applications may reboot due to insufficient stack size for other tasks."
+
+v36 跑得动是代码体积小，加了麦克风/触摸/OTA 后内存压力涨上来一启动 Avatar 就翻车。
+
+**修法（v0.4.4）**:
+- `avatar.init()` 挪到 setup 最末（connectWiFi + downloadFaces + ws.beginSSL 全跑完之后）
+- setup 全程 `STEP(n, "msg")` 宏打 Serial + 打印 heap/psram
+- `downloadFaces()` 加 WiFi 检查，没连上就 skip 不要白白等 6×5s
+
+**教训**: 第三方库可能 spawn 后台 task 持续吃栈/共享外设，跟主流程操作要明确解耦。Avatar.init 这种调用必须放最后。
+
+## 18. WiFi 一直跳 "trying:xxx" 死等
+
+**症状**: 烧完固件，屏幕一直滚动 trying: SSID-A → FAIL → trying: SSID-B → FAIL → ...，根本连不上、也不切走，循环死等。
+
+**根因**: `connectWiFi()` 不预扫，对每个 `WIFI_LIST[i]` 无脑 `WiFi.begin` + 20×500ms = 10 秒超时。SSID 不在范围时硬等 10s × N 个。loop 里 `if (status != CONNECTED) connectWiFi()` 又反复触发整个流程。
+
+**修法（v0.4.4）**:
+- 进 connectWiFi 先 `WiFi.scanNetworks(false, false, false, 400)`
+- 不可见 SSID 直接 `continue` 跳过（屏幕显示 `skip xxx`）
+- 可见的才 try，超时减到 7s（14×500ms）
+- 连上后 `WiFi.setAutoReconnect(true) + persistent(true)`，断线 ESP 自己重连
+- loop 重连节流：30s 最多一次
+
+## 19. Stack Chan 舵机/灯光毫无反应（V0.1~V0.4.3 一路抄错三联锅）
+
+**症状**: MCP 下发 `rotate_head`/`wiggle` 命令，舵机一动不动；底座 12 RGB LED 也一直暗。出厂演示固件能动能亮，硬件 OK。
+
+**根因（三件套同时错）**:
+
+1. **引脚错**: 当前 `SERVO_PAN=8, SERVO_TILT=9`(Port B G8/G9)，但 Stack-chan 底座舵机插 **Port A**（G1/G2），Port B 引脚根本不对。
+2. **电源没开**: `M5.Power.setExtOutput(true)` 这条被删了——Port A 5V 输出没开 = 舵机没电。
+3. **PWM 没初始化**: 缺 `ESP32PWM::allocateTimer(0)` + `setPeriodHertz(50)`。ESP32-S3 上 ESP32Servo 库**必须**先分配 timer 设 50Hz，否则 `attach()` 出来的 PWM 频率/占空比都不对，舵机看不懂信号。
+
+**LED 一锅**: 整份 .ino 里一行 LED / NeoPixel / FastLED 控制代码都没有。出厂时灯亮是底座出厂演示固件干的，不是主板 ESP32 控制的。当前固件 MCP 命令再怎么下发也亮不了。
+
+**修法（v0.4.4，舵机部分）**:
+```cpp
+// setup 里 M5.Power.begin() 之后立即:
+M5.Power.setExtOutput(true);       // Port A 5V
+ESP32PWM::allocateTimer(0);
+servoPan.setPeriodHertz(50);
+servoTilt.setPeriodHertz(50);
+servoPan.attach(SERVO_PAN /*=1*/, 500, 2400);
+servoTilt.attach(SERVO_TILT /*=2*/, 500, 2400);
+servoPan.write(90); servoTilt.write(90);
+```
+
+**教训**: v36 setup 里这三件套是齐的，后续窗口"重构"成 lazy attach 时把 timer 分配也丢了，引脚改 Port B 又"为了避开 I2C"丢了 5V 电源。**改硬件相关代码必须照搬 v36 这种已验证过的范式**，每个常量背后都对应一条硬件事实。

@@ -15,7 +15,7 @@
 **读类**: get_context, read_notes, read_moments, get_diary_list, get_mood_history, recall_deep, bookshelf_list, bookshelf_read, list_stickers
 **系统**: exec_vps（小宝调用 = 危险，chat 端没放白名单）
 **小镇**: town_work, town_submit, town_balance, town_shop, town_history
-**工程笔记** (新加): read_eng_notes, write_eng_notes
+**工程笔记** (新加): read_eng_notes
 
 ## 关键表 schema
 

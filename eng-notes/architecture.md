@@ -21,7 +21,7 @@ DNS 在腾讯云 dnspod，**不经过 Cloudflare**（直连 VPS）。
 | `chan.coolmbaby.top` | `localhost:5181` | Stack Chan relay |
 | `coolmbaby.top:5180` 直连 | memory-v2 全套 web（chat/书架/小镇/日历/朋友圈） |
 
-Caddy 配置: `/etc/caddy/Caddyfile`，reload 用 `systemctl reload caddy`。
+Caddy 配置：`/etc/caddy/Caddyfile`，reload 用 `systemctl reload caddy`。
 
 ## systemd 服务
 

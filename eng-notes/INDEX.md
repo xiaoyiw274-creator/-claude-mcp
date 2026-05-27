@@ -11,6 +11,7 @@
 | `architecture.md` | VPS 整体架构、服务/端口/Caddy/域名 |
 | `memory-v2.md` | 记忆库 chat 后端（小宝那套） |
 | `mcp-server.md` | /root/mcp-server 工具清单 + DB schema |
+| `telegram-bot.md` | Telegram ↔ Claude Code 桥 + 主动 push 规则引擎 (monitor.py) |
 | `stack-chan.md` | Stack Chan 整套（VPS relay + 固件 + MCP） |
 | `sillytavern.md` | ST 反代 + 配置 |
 | `bug-history.md` | 修过的关键 bug + 根因 + 修法（避免重复踩坑） |
