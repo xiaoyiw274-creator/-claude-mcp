@@ -1,0 +1,15 @@
+[Unit]
+Description=Desire kernel daemon (TG bot Phase 1, observe-only)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/telegram-claude-bot
+ExecStart=/usr/bin/python3 /opt/telegram-claude-bot/desire_daemon.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
