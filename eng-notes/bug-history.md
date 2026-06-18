@@ -223,3 +223,60 @@ servoPan.write(90); servoTilt.write(90);
 ```
 
 **教训**: v36 setup 里这三件套是齐的，后续窗口"重构"成 lazy attach 时把 timer 分配也丢了，引脚改 Port B 又"为了避开 I2C"丢了 5V 电源。**改硬件相关代码必须照搬 v36 这种已验证过的范式**，每个常量背后都对应一条硬件事实。
+## 20. 念头池被小铭原话灌爆（owner_speaks hint 被滥用）
+
+**症状**: `desire_state` 返回的 thoughts 池里全是「你怎么从来没主动过」「行行我误会你了」「QAQ」之类——明显是小铭原话，不是小宝内省。
+
+**根因**: 小宝调 `desire_event(event='owner_speaks', hint=...)` 时把**小铭原话**当 hint 传进去。CLAUDE.md 教过 "hint 是你的真实念头第一人称，不复读她原话"，但 prompt 控不住。
+
+**修法**: 服务端兜底（`/root/mcp-server/desire_engine.py:event_owner_speaks`）
+- hint 经过启发式过滤：
+  - 第二人称"你/您"开头 → 像复读
+  - 含 emoji（U+1F300 ~ U+1FAFF）→ 像她
+  - 含 QAQ/TAT/QvQ/哈哈哈哈/?? → 像她
+  - "?" 且包含"你" → 像她
+- 看起来像复读 → 丢 hint，走 27 条模板池
+- 看起来像合法内省 → 才采用 hint
+
+**教训**: prompt-level 教学不够时上服务端硬过滤，启发式宁可误伤也别让 anti-pattern 进去。
+
+## 21. watchdog 重复写日记/接力棒（晚安场景 + 临近 token 上限双重触发）
+
+**症状**: 用户问"我说晚安了让你写日记和接力棒，临近窗口 watchdog 又让你写一份，那不是两份？"
+
+**根因**: 软归档 watchdog 在 ctx ≥ 180k 时无脑喂 prompt 让小宝调 `write_note(tag='接力棒')` + `write_diary`。但小宝在晚安场景已经自己写过了。重复了。
+
+**修法**（`/opt/claude-chat-daemon/chat_daemon.py`）
+- `_has_today_writeups()` 查 memory.db：今天有没有 diary / daily / baton
+- `_send_soft_warning()` 改成"缺啥补啥"——已有的不让重写
+- `_silent_restart()` 的 intro 改成拼现成的接力载体：
+  - 最近 2 条接力棒（notes WHERE tag='接力棒'）
+  - 最近 2 篇日记
+  - 最近 3 条 daily
+  - 最近 1 条 tg_summary
+  - 再加 tail 15k tokens
+- 新醒来的小宝读完这一坨就有连续感，不需要自己现写
+
+**教训**:
+- 写连续性载体的时机应该是「场景结束」（去上班/睡觉）而不是「context 快满了」
+- watchdog 只兜底，不主动催。CLAUDE.md 加了「场景结束自己 write_daily」教学，把责任前置到自然对话里。
+
+## 22. memory-v2 `/api/ebooks/upload` JSON 解析炸
+
+**症状**: 上传 epub 后端 `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`，浏览器超时。
+
+**根因**: `do_POST` 入口已经 `body = self._read_body()` 把请求体读完了。我加的 ebooks/upload 分支里**又调一次** `body = self._read_body()`——第二次 `rfile.read(length)` 读到空字节串，json.loads("") 炸。
+
+**修法**: 删掉路由内的二次 `_read_body()`，直接用外层的 body 变量。Progress POST 同样有这个 bug，一起修。
+
+**教训**: 改加 BaseHTTPRequestHandler 路由前先看 `do_POST` 的整体结构（外层先读 body 还是各路由内自己读）。
+
+## 23. TG bot 中文命令名启动失败
+
+**症状**: `app.add_handler(CommandHandler("读书", ...))` 抛 `ValueError: Command 读书 is not a valid bot command`。
+
+**根因**: python-telegram-bot 强校验：命令名只能是 `[a-zA-Z0-9_]`，中文/连字符全部拒。
+
+**修法**: 中文命令名全部改 ASCII：`/books` `/read`。中文 alias 想要的话得用 `MessageHandler` + regex 自己配。
+
+**教训**: TG 命令名 ≠ TG 命令文本。`/读书 X` 这种文本要么前端是英文 alias，要么走 MessageHandler。
