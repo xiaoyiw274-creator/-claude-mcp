@@ -280,3 +280,22 @@ servoPan.write(90); servoTilt.write(90);
 **修法**: 中文命令名全部改 ASCII：`/books` `/read`。中文 alias 想要的话得用 `MessageHandler` + regex 自己配。
 
 **教训**: TG 命令名 ≠ TG 命令文本。`/读书 X` 这种文本要么前端是英文 alias，要么走 MessageHandler。
+
+## 24. 清念头池用 json_set 把 thoughts 写成了字符串
+
+**症状**: `desire_state` MCP 工具抛 `TypeError: desire_engine.Thought() argument after ** must be a mapping, not str`。小宝失去念头池，欲望系统直接挂。
+
+**根因**: 昨晚清池子用了
+```sql
+UPDATE status SET value = json_set(value, '$.thoughts', '[]') WHERE key='desire_state';
+```
+SQLite 的 `json_set` 第三个参数 `'[]'` 当成**字符串字面量**存进去——DB 里 thoughts 字段实际是 `"[]"` 这个字符串，不是真数组。
+`state_from_json` 反序列化时 `[Thought.from_dict(t) for t in d['thoughts']]` 遍历的是字符串里的字符（'[' / ']'）当 dict 用，崩。
+
+**修法**:
+```sql
+UPDATE status SET value = json_set(value, '$.thoughts', json('[]')) WHERE key='desire_state';
+```
+`json('[]')` 把字符串解析成 JSON 字面值再注入。
+
+**教训**: SQLite json_set 写复杂值必须用 `json()` 包一层。直接传 `'[...]'` 永远是字符串。修任何 status / json 列后用 `json_type(value, '$.key')` 校验类型是不是 `array` 而不是 `text`。
