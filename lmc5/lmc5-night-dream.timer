@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LMC-5 night dream daily at 03:00
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=300
+Unit=lmc5-night-dream.service
+
+[Install]
+WantedBy=timers.target
