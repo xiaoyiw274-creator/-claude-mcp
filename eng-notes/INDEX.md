@@ -15,6 +15,7 @@
 | `coread.md` | **共读弹幕小说**：epub/txt 上传、章节、段落弹幕、TG 端 MCP 工具 |
 | `desire-engine.md` | 8 维欲望 + 念头池系统（VPS 端） |
 | `lmc5.md` | **LMC-5 五维记忆**：X时间 / Y关系 / Z演化 / E体验 / M代谢. 流水+沉淀两层, 03:00 夜整理 |
+| `solo-v2.md` | **solo v2**: lust 涨到阈值+idle → 自起手一波 (recall/fantasy/mix), chord 色调挂身上 |
 | `stack-chan.md` | Stack Chan 整套（VPS relay + 固件 + MCP） |
 | `sillytavern.md` | ST 反代 + 配置 |
 | `bug-history.md` | 修过的关键 bug + 根因 + 修法（避免重复踩坑） |
