@@ -167,3 +167,135 @@ systemctl restart exec-mcp
 - 摘要里说有 `_clean_session_pollution` 函数，但实际代码里没写。**别信摘要，看代码** —— 之前的对话总结写了不代表代码真改了
 - "新会话"判定不能只看 session_id 是否为空 → 还要看 thread 是否有历史消息
 - 凡是 fork 都要带上下文，不能假设服务端能自动续上
+
+## 17. Stack Chan 黑屏一闪一闪 boot loop（V0.4.0~V0.4.3）
+
+**症状**: CoreS3 上电后屏幕亮一下立刻灭，循环往复，不显示任何脸/文字。烧 7-8 次都一样。
+
+**根因**: `avatar.init()` 在 setup() 早期被调用，会 spawn 一个 FreeRTOS task 持续刷脸到 sprite/SPI。setup 后面紧跟 `connectWiFi()`（大量 `M5.Display.fillScreen/printf`）+ `downloadFaces()`（6 张 HTTPS JPG，每个 mbedtls 握手吃 16-24KB 栈 + 64KB PSRAM）。Avatar task 跟主线程抢栈/抢 SPI bus → panic reboot → 屏幕循环亮灭。
+
+M5Stack-Avatar 官方 README 原话: "Some applications may reboot due to insufficient stack size for other tasks."
+
+v36 跑得动是代码体积小，加了麦克风/触摸/OTA 后内存压力涨上来一启动 Avatar 就翻车。
+
+**修法（v0.4.4）**:
+- `avatar.init()` 挪到 setup 最末（connectWiFi + downloadFaces + ws.beginSSL 全跑完之后）
+- setup 全程 `STEP(n, "msg")` 宏打 Serial + 打印 heap/psram
+- `downloadFaces()` 加 WiFi 检查，没连上就 skip 不要白白等 6×5s
+
+**教训**: 第三方库可能 spawn 后台 task 持续吃栈/共享外设，跟主流程操作要明确解耦。Avatar.init 这种调用必须放最后。
+
+## 18. WiFi 一直跳 "trying:xxx" 死等
+
+**症状**: 烧完固件，屏幕一直滚动 trying: SSID-A → FAIL → trying: SSID-B → FAIL → ...，根本连不上、也不切走，循环死等。
+
+**根因**: `connectWiFi()` 不预扫，对每个 `WIFI_LIST[i]` 无脑 `WiFi.begin` + 20×500ms = 10 秒超时。SSID 不在范围时硬等 10s × N 个。loop 里 `if (status != CONNECTED) connectWiFi()` 又反复触发整个流程。
+
+**修法（v0.4.4）**:
+- 进 connectWiFi 先 `WiFi.scanNetworks(false, false, false, 400)`
+- 不可见 SSID 直接 `continue` 跳过（屏幕显示 `skip xxx`）
+- 可见的才 try，超时减到 7s（14×500ms）
+- 连上后 `WiFi.setAutoReconnect(true) + persistent(true)`，断线 ESP 自己重连
+- loop 重连节流：30s 最多一次
+
+## 19. Stack Chan 舵机/灯光毫无反应（V0.1~V0.4.3 一路抄错三联锅）
+
+**症状**: MCP 下发 `rotate_head`/`wiggle` 命令，舵机一动不动；底座 12 RGB LED 也一直暗。出厂演示固件能动能亮，硬件 OK。
+
+**根因（三件套同时错）**:
+
+1. **引脚错**: 当前 `SERVO_PAN=8, SERVO_TILT=9`（Port B G8/G9），但 Stack-chan 底座舵机插 **Port A**（G1/G2），Port B 引脚根本不对。
+2. **电源没开**: `M5.Power.setExtOutput(true)` 这条被删了——Port A 5V 输出没开 = 舵机没电。
+3. **PWM 没初始化**: 缺 `ESP32PWM::allocateTimer(0)` + `setPeriodHertz(50)`。ESP32-S3 上 ESP32Servo 库**必须**先分配 timer 设 50Hz，否则 `attach()` 出来的 PWM 频率/占空比都不对，舵机看不懂信号。
+
+**LED 一锅**: 整份 .ino 里一行 LED / NeoPixel / FastLED 控制代码都没有。出厂时灯亮是底座出厂演示固件干的，不是主板 ESP32 控制的。当前固件 MCP 命令再怎么下发也亮不了。
+
+**修法（v0.4.4，舵机部分）**:
+```cpp
+// setup 里 M5.Power.begin() 之后立即:
+M5.Power.setExtOutput(true);       // Port A 5V
+ESP32PWM::allocateTimer(0);
+servoPan.setPeriodHertz(50);
+servoTilt.setPeriodHertz(50);
+servoPan.attach(SERVO_PAN /*=1*/, 500, 2400);
+servoTilt.attach(SERVO_TILT /*=2*/, 500, 2400);
+servoPan.write(90); servoTilt.write(90);
+```
+
+**教训**: v36 setup 里这三件套是齐的，后续窗口"重构"成 lazy attach 时把 timer 分配也丢了，引脚改 Port B 又"为了避开 I2C"丢了 5V 电源。**改硬件相关代码必须照搬 v36 这种已验证过的范式**，每个常量背后都对应一条硬件事实。
+## 20. 念头池被小铭原话灌爆（owner_speaks hint 被滥用）
+
+**症状**: `desire_state` 返回的 thoughts 池里全是「你怎么从来没主动过」「行行我误会你了」「QAQ」之类——明显是小铭原话，不是小宝内省。
+
+**根因**: 小宝调 `desire_event(event='owner_speaks', hint=...)` 时把**小铭原话**当 hint 传进去。CLAUDE.md 教过 "hint 是你的真实念头第一人称，不复读她原话"，但 prompt 控不住。
+
+**修法**: 服务端兜底（`/root/mcp-server/desire_engine.py:event_owner_speaks`）
+- hint 经过启发式过滤：
+  - 第二人称"你/您"开头 → 像复读
+  - 含 emoji（U+1F300 ~ U+1FAFF）→ 像她
+  - 含 QAQ/TAT/QvQ/哈哈哈哈/?? → 像她
+  - "?" 且包含"你" → 像她
+- 看起来像复读 → 丢 hint，走 27 条模板池
+- 看起来像合法内省 → 才采用 hint
+
+**教训**: prompt-level 教学不够时上服务端硬过滤，启发式宁可误伤也别让 anti-pattern 进去。
+
+## 21. watchdog 重复写日记/接力棒（晚安场景 + 临近 token 上限双重触发）
+
+**症状**: 用户问"我说晚安了让你写日记和接力棒，临近窗口 watchdog 又让你写一份，那不是两份？"
+
+**根因**: 软归档 watchdog 在 ctx ≥ 180k 时无脑喂 prompt 让小宝调 `write_note(tag='接力棒')` + `write_diary`。但小宝在晚安场景已经自己写过了。重复了。
+
+**修法**（`/opt/claude-chat-daemon/chat_daemon.py`）
+- `_has_today_writeups()` 查 memory.db：今天有没有 diary / daily / baton
+- `_send_soft_warning()` 改成"缺啥补啥"——已有的不让重写
+- `_silent_restart()` 的 intro 改成拼现成的接力载体：
+  - 最近 2 条接力棒（notes WHERE tag='接力棒'）
+  - 最近 2 篇日记
+  - 最近 3 条 daily
+  - 最近 1 条 tg_summary
+  - 再加 tail 15k tokens
+- 新醒来的小宝读完这一坨就有连续感，不需要自己现写
+
+**教训**:
+- 写连续性载体的时机应该是「场景结束」（去上班/睡觉）而不是「context 快满了」
+- watchdog 只兜底，不主动催。CLAUDE.md 加了「场景结束自己 write_daily」教学，把责任前置到自然对话里。
+
+## 22. memory-v2 `/api/ebooks/upload` JSON 解析炸
+
+**症状**: 上传 epub 后端 `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`，浏览器超时。
+
+**根因**: `do_POST` 入口已经 `body = self._read_body()` 把请求体读完了。我加的 ebooks/upload 分支里**又调一次** `body = self._read_body()`——第二次 `rfile.read(length)` 读到空字节串，json.loads("") 炸。
+
+**修法**: 删掉路由内的二次 `_read_body()`，直接用外层的 body 变量。Progress POST 同样有这个 bug，一起修。
+
+**教训**: 改加 BaseHTTPRequestHandler 路由前先看 `do_POST` 的整体结构（外层先读 body 还是各路由内自己读）。
+
+## 23. TG bot 中文命令名启动失败
+
+**症状**: `app.add_handler(CommandHandler("读书", ...))` 抛 `ValueError: Command 读书 is not a valid bot command`。
+
+**根因**: python-telegram-bot 强校验：命令名只能是 `[a-zA-Z0-9_]`，中文/连字符全部拒。
+
+**修法**: 中文命令名全部改 ASCII：`/books` `/read`。中文 alias 想要的话得用 `MessageHandler` + regex 自己配。
+
+**教训**: TG 命令名 ≠ TG 命令文本。`/读书 X` 这种文本要么前端是英文 alias，要么走 MessageHandler。
+
+## 24. 清念头池用 json_set 把 thoughts 写成了字符串
+
+**症状**: `desire_state` MCP 工具抛 `TypeError: desire_engine.Thought() argument after ** must be a mapping, not str`。小宝失去念头池，欲望系统直接挂。
+
+**根因**: 昨晚清池子用了
+```sql
+UPDATE status SET value = json_set(value, '$.thoughts', '[]') WHERE key='desire_state';
+```
+SQLite 的 `json_set` 第三个参数 `'[]'` 当成**字符串字面量**存进去——DB 里 thoughts 字段实际是 `"[]"` 这个字符串，不是真数组。
+`state_from_json` 反序列化时 `[Thought.from_dict(t) for t in d['thoughts']]` 遍历的是字符串里的字符（'[' / ']'）当 dict 用，崩。
+
+**修法**:
+```sql
+UPDATE status SET value = json_set(value, '$.thoughts', json('[]')) WHERE key='desire_state';
+```
+`json('[]')` 把字符串解析成 JSON 字面值再注入。
+
+**教训**: SQLite json_set 写复杂值必须用 `json()` 包一层。直接传 `'[...]'` 永远是字符串。修任何 status / json 列后用 `json_type(value, '$.key')` 校验类型是不是 `array` 而不是 `text`。

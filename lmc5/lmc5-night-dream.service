@@ -1,0 +1,12 @@
+[Unit]
+Description=LMC-5 Night Dream (memory consolidation via claude -p hippocampus)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/mcp-server
+ExecStart=/usr/bin/python3 -m lmc5.night_dream
+StandardOutput=append:/var/log/lmc5_night_dream.log
+StandardError=append:/var/log/lmc5_night_dream.log
+TimeoutStartSec=600
+User=root

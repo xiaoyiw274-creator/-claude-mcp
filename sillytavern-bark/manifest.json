@@ -1,0 +1,12 @@
+{
+  "display_name": "Bark Push (生成完成推手机)",
+  "loading_order": 100,
+  "requires": [],
+  "optional": [],
+  "js": "index.js",
+  "css": "",
+  "author": "xiaoyi",
+  "version": "0.1.0",
+  "homePage": "",
+  "auto_update": false
+}

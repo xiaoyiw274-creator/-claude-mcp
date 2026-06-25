@@ -1,0 +1,208 @@
+/* === 默认 (粉系半透明磨砂) === */
+.chat-skin-default {
+  --chat-bg: linear-gradient(180deg, #FFEEF2 0%, #FFE4EC 50%, #FFDCE8 100%);
+  --nav-bg: rgba(255,255,255,.65);
+  --nav-color: #1a1a1a;
+  --nav-sub: #999;
+  --status-tint: #3a2820;
+  --bubble-user-bg: rgba(255,255,255,.78);
+  --bubble-user-color: #585858;
+  --bubble-ai-bg: rgba(255,255,255,.78);
+  --bubble-ai-color: #585858;
+  --bubble-blur: 8px;
+  --input-area-bg: rgba(247,247,247,.85);
+  --input-bg: #fff;
+  --input-color: #1a1a1a;
+  --input-placeholder: #aaa;
+  --time-bg: rgba(0,0,0,.05);
+  --time-color: #999;
+  --panel-bg: rgba(247,247,247,.92);
+  --plus-tile-bg: #fff;
+  --plus-tile-color: #666;
+  --accent-default: #FF8FA3;
+  --border-color: rgba(0,0,0,.06);
+}
+
+/* === 粉萌兔耳 (Vivian) - 全套樱花粉 === */
+.chat-skin-rabbit_ears {
+  --chat-bg: linear-gradient(180deg, #FFEEF2 0%, #FFDCE8 100%);
+  --nav-bg: rgba(255,245,247,.92);
+  --nav-color: #BF7A85;
+  --nav-sub: #D9A0A8;
+  --status-tint: #BF7A85;
+  --bubble-user-bg: #FFF5F7;
+  --bubble-user-color: #BF7A85;
+  --bubble-ai-bg: #FFF5F7;
+  --bubble-ai-color: #BF7A85;
+  --bubble-blur: 0px;
+  --input-area-bg: rgba(255,235,240,.95);
+  --input-bg: #fff;
+  --input-color: #BF7A85;
+  --input-placeholder: #E0B5BC;
+  --time-bg: rgba(191,122,133,.1);
+  --time-color: #BF7A85;
+  --panel-bg: rgba(255,235,240,.95);
+  --plus-tile-bg: #fff;
+  --plus-tile-color: #BF7A85;
+  --accent-default: #FF8FA3;
+  --border-color: rgba(191,122,133,.15);
+}
+/* 兔耳贴纸 ::before / ::after */
+.chat-skin-rabbit_ears .bubble-content::before,
+.chat-skin-rabbit_ears .bubble-content::after {
+  content: '';
+  display: block;
+  background-image: url('https://s3plus.meituan.net/opapisdk/op_ticket_1_5673241091_1763553178875_qdqqd_2a0ucc.PNG');
+  background-size: contain; background-repeat: no-repeat;
+  width: 33px; height: 33px;
+  position: absolute; top: -5px; z-index: 10;
+  pointer-events: none;
+}
+.chat-skin-rabbit_ears .bubble-content::before { left: -13px; transform: rotate(-10deg); }
+.chat-skin-rabbit_ears .bubble-content::after  { right: -13px; transform: rotate(10deg) scaleX(-1); }
+/* 兔耳风格的 + 面板 tile */
+.chat-skin-rabbit_ears .plus-tile { box-shadow: 0 2px 6px rgba(191,122,133,.15) !important; }
+
+/* === 经典微信 === */
+.chat-skin-wechat {
+  --chat-bg: #EDEDED;
+  --nav-bg: rgba(237,237,237,.95);
+  --nav-color: #1a1a1a;
+  --nav-sub: #888;
+  --status-tint: #1a1a1a;
+  --bubble-user-bg: #95EC69;
+  --bubble-user-color: #1a1a1a;
+  --bubble-ai-bg: #fff;
+  --bubble-ai-color: #1a1a1a;
+  --bubble-blur: 0px;
+  --input-area-bg: #F7F7F7;
+  --input-bg: #fff;
+  --input-color: #1a1a1a;
+  --input-placeholder: #999;
+  --time-bg: rgba(0,0,0,.1);
+  --time-color: #888;
+  --panel-bg: #F7F7F7;
+  --plus-tile-bg: #fff;
+  --plus-tile-color: #555;
+  --accent-default: #07C160;
+  --border-color: rgba(0,0,0,.08);
+}
+
+/* === 奶油泡 === */
+.chat-skin-cream {
+  --chat-bg: linear-gradient(180deg, #FFFAF0 0%, #F5E6CC 100%);
+  --nav-bg: rgba(255,250,240,.92);
+  --nav-color: #6B4F3F;
+  --nav-sub: #A88770;
+  --status-tint: #6B4F3F;
+  --bubble-user-bg: #FFFAF0;
+  --bubble-user-color: #6B4F3F;
+  --bubble-ai-bg: #FFFAF0;
+  --bubble-ai-color: #6B4F3F;
+  --bubble-blur: 0px;
+  --input-area-bg: rgba(245,230,204,.85);
+  --input-bg: #FFFAF0;
+  --input-color: #6B4F3F;
+  --input-placeholder: #B5957A;
+  --time-bg: rgba(107,79,63,.12);
+  --time-color: #8A6F5C;
+  --panel-bg: rgba(245,230,204,.92);
+  --plus-tile-bg: #FFFAF0;
+  --plus-tile-color: #6B4F3F;
+  --accent-default: #B8956C;
+  --border-color: rgba(107,79,63,.15);
+}
+.chat-skin-cream .bubble-content {
+  border-radius: 18px !important;
+  padding: 11px 16px !important;
+  box-shadow: 0 2px 8px rgba(139,108,72,.12), inset 0 1px 0 rgba(255,255,255,.5) !important;
+}
+
+/* === 暗夜 === */
+.chat-skin-dark {
+  --chat-bg: linear-gradient(180deg, #0c0c0e 0%, #1c1c1e 100%);
+  --nav-bg: rgba(28,28,30,.92);
+  --nav-color: #E8E8EA;
+  --nav-sub: #888;
+  --status-tint: #E8E8EA;
+  --bubble-user-bg: rgba(60,60,62,.85);
+  --bubble-user-color: #E8E8EA;
+  --bubble-ai-bg: rgba(40,40,42,.85);
+  --bubble-ai-color: #E8E8EA;
+  --bubble-blur: 12px;
+  --input-area-bg: rgba(28,28,30,.9);
+  --input-bg: #2c2c2e;
+  --input-color: #E8E8EA;
+  --input-placeholder: #666;
+  --time-bg: rgba(255,255,255,.08);
+  --time-color: #888;
+  --panel-bg: rgba(28,28,30,.95);
+  --plus-tile-bg: #2c2c2e;
+  --plus-tile-color: #E8E8EA;
+  --accent-default: #A78BFA;
+  --border-color: rgba(255,255,255,.08);
+}
+
+/* === 古书 (剧本馆风) === */
+.chat-skin-ancient {
+  --chat-bg: linear-gradient(180deg, #FBF6EE 0%, #F4EBDB 100%);
+  --nav-bg: rgba(92,58,46,.92);
+  --nav-color: #FBF6EE;
+  --nav-sub: #D8C5A8;
+  --status-tint: #5c3a2e;
+  --bubble-user-bg: rgba(255,255,255,.4);
+  --bubble-user-color: #3a2820;
+  --bubble-ai-bg: rgba(255,255,255,.4);
+  --bubble-ai-color: #3a2820;
+  --bubble-blur: 4px;
+  --input-area-bg: rgba(240,230,210,.9);
+  --input-bg: #FBF6EE;
+  --input-color: #3a2820;
+  --input-placeholder: #9c8060;
+  --time-bg: rgba(139,69,19,.1);
+  --time-color: #8B7068;
+  --panel-bg: rgba(240,230,210,.95);
+  --plus-tile-bg: #FBF6EE;
+  --plus-tile-color: #5c3a2e;
+  --accent-default: #8B4513;
+  --border-color: rgba(139,69,19,.15);
+}
+.chat-skin-ancient .bubble-content {
+  font-family: 'Cormorant Garamond', 'PingFang SC', serif !important;
+}
+
+
+/* === 仿 QQ (借鉴兔k 仿 qq 设计 by 之意) === */
+.chat-skin-qq {
+  --chat-bg: #FFFFFF;
+  --nav-bg: rgba(255,255,255,.95);
+  --nav-color: #333;
+  --nav-sub: #999;
+  --status-tint: #333;
+  --bubble-user-bg: #4397F7;
+  --bubble-user-color: #FFFFFF;
+  --bubble-ai-bg: #F7F7F7;
+  --bubble-ai-color: #5A5A5C;
+  --bubble-blur: 0px;
+  --input-area-bg: #F0F2F5;
+  --input-bg: #FFFFFF;
+  --input-color: #333;
+  --input-placeholder: #C0C0C0;
+  --time-bg: rgba(0,0,0,.04);
+  --time-color: #999;
+  --panel-bg: #F0F2F5;
+  --plus-tile-bg: #FFFFFF;
+  --plus-tile-color: #555;
+  --accent-default: #4397F7;
+  --border-color: rgba(0,0,0,.06);
+}
+.chat-skin-qq .bubble-content {
+  border-radius: 10px !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  line-height: 1.45 !important;
+}
+.chat-skin-qq .bubble-content::before,
+.chat-skin-qq .bubble-content::after {
+  display: none !important;
+}
