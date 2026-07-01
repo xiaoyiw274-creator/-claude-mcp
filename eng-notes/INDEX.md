@@ -15,6 +15,8 @@
 | `sillytavern.md` | ST 反代 + 配置 |
 | `bug-history.md` | 修过的关键 bug + 根因 + 修法（避免重复踩坑） |
 | `conventions.md` | 工作约定（工程师角色、token 来源、白名单等） |
+| `solo-strip-fix.md` | Solo 报告污染修复（desire_daemon jsonl 清理） |
+| `book-tab.md` | Book tab（替代 Code tab）功能记录 |
 
 ## 用法（新窗口开场示范）
 
